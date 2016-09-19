@@ -62,7 +62,7 @@ void setup() {
 
 
 int variance = 0;
-boolean doprints = false;
+boolean doprints = true;
 
 void loop() {
   // Base hue, 14 bits
@@ -80,13 +80,18 @@ void loop() {
     Serial.print(hueVariance);
   }
 
+  // START HERE:
+  // When hueVariance is zero, speed does...something
+  // Sat/bright pots combined??
+  // 
+
   byte saturation = analogRead(POT_SAT) >> 2;
-  byte hue;
-  // START HERE: this is blinky and stuff when moved; start it with zero every time and it's fine
-  //word curVariance = variance % (hueVariance<<1);
+  FastLED.setBrightness(analogRead(POT_BRIGHT) >> 2);
+  
   while (variance < 0) variance += hueVariance*2;
   while (hueVariance > 0 && variance > (hueVariance*2)) variance -= hueVariance*2;
   int curVariance = variance;
+  byte hue;
   for (int i = 0; i < NUM_LEDS; i++) {
     hue = (baseHue + ((curVariance < hueVariance) ? (curVariance) : ((hueVariance << 1) - curVariance)) - 1) >> 6;
     //hue = (baseHue + ((curVariance < hueVariance) ? (curVariance) : ((hueVariance << 1) - curVariance)) - 1) >> 6;
@@ -128,7 +133,6 @@ void loop() {
     if (doprints) Serial.println(thing);
   }
   //Serial.println("\n");
-  FastLED.setBrightness(analogRead(POT_BRIGHT) >> 2);
   FastLED.show();
   FastLED.delay(1000/FPS);
 }
