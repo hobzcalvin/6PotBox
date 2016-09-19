@@ -18,9 +18,9 @@
 #define POT_HUE     A4
 #define POT_HUEVAR  A8
 #define POT_HUEWID  A9
-#define POT_SAT     A5
+#define POT_NOISE     A5
 #define POT_SPEED   A7
-#define POT_BRIGHT  A6
+#define POT_BRIGHTSAT  A6
 
 #define LED_PIN     13
 
@@ -61,6 +61,7 @@ void setup() {
   FastLED.show();
   delay(500);
 
+  random16_set_seed(analogRead(POT_SPEED));
   //Serial.begin(9600);
 
   last_ms = millis();
@@ -70,6 +71,7 @@ void setup() {
 int variance = 0;
 boolean doprints = false;
 uint16_t noiseIn = 0;
+boolean reversed = false;
 
 void loop() {
   
@@ -83,7 +85,7 @@ void loop() {
   // START HERE:
   // When hueVariance is zero, speed does...something
   // 
-  word brightsat = analogRead(POT_BRIGHT);
+  word brightsat = analogRead(POT_BRIGHTSAT);
   byte saturation;
   if (brightsat < 512) {
     FastLED.setBrightness(brightsat >> 1);
@@ -92,7 +94,16 @@ void loop() {
     FastLED.setBrightness(255);
     saturation = (1023 - brightsat) >> 1;
   }
-  uint16_t noNoise = 255 - (analogRead(POT_SAT) >> 2);
+  uint16_t noNoise;
+  uint16_t reverseProb;
+  int potNoise = analogRead(POT_NOISE);
+  if (potNoise > 511) {
+    noNoise = 255 - byte(potNoise >> 1);
+    reverseProb = 0;
+  } else {
+    noNoise = 255;
+    reverseProb = 511 - potNoise;
+  }
   
   int spd = analogRead(POT_SPEED);
   int speed_adder = 0;
@@ -101,7 +112,18 @@ void loop() {
   } else if (spd > 512 + MIDDLE_TOL) {
     speed_adder = 512 + MIDDLE_TOL - spd;
   }
+  uint16_t target = reverseProb * abs(speed_adder) * 5 / FPS;
+  if (reverseProb > 0 && random16() < target) {
+    /*Serial.print("REVERSE! ");
+    Serial.println(target);*/
+    reversed = !reversed;
+  }
+  if (reversed) {
+    speed_adder *= -1;
+  }
   noiseIn += speed_adder / (FPS/4);
+
+  // START HERE: IDEA: for other side of noise pot, increase likelihood of direction change!
 
   /*if (doprints) {
     Serial.print(">>> basehue ");
@@ -141,19 +163,13 @@ void loop() {
     Serial.print(hue);*/
     //Serial.print(',');
     if (saturation) {
-      /*uint16_t ms = millis() >> 1;
-      byte brt = inoise8(ms, i<<7);//inoise8(variance >> 4, uint16_t(i) << 4);*/
-
-      byte brt = inoise8(noiseIn, i << 4, 0);
-      byte srt = inoise8(noiseIn, i << 4, 0xF000);
-      /*if (i == 0) {
-        Serial.print(noNoise);
-        Serial.print(' ');
-        Serial.print(noiseIn);
-        Serial.print(' ');
-        Serial.println(brt);
-      }*/
-      leds[i] = CHSV(hue, min(max(noNoise, uint16_t(srt)*2), saturation), max(noNoise, uint16_t(brt)));
+      if (noNoise < 255) {
+        byte brt = inoise8(noiseIn, i << 4, 0);
+        byte srt = inoise8(noiseIn, i << 4, 0xF000);
+        leds[i] = CHSV(hue, min(max(noNoise, uint16_t(srt)*2), saturation), max(noNoise, uint16_t(brt)));
+      } else {
+        leds[i] = CHSV(hue, saturation, 255);
+      }
     } else {
       // Special case: if saturation is zero (all white), use hue for brightness
       leds[i] = CHSV(0, 0, hue);
