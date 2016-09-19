@@ -29,7 +29,7 @@
 #define COLOR_ORDER RGB
 #define LED_SETTINGS CHIPSET, DATA_PIN, COLOR_ORDER
 
-#define FPS 15
+#define FPS 60
 #define NUM_LEDS 100
 CRGB leds[NUM_LEDS];
 
@@ -100,34 +100,43 @@ void loop() {
 
 
 
-word variance = 0;
+int variance = 0;
+boolean doprints = false;
 
 void loop() {
   // Base hue, 14 bits
   word baseHue = analogRead(POT_HUE) << 4;
   // How far away we go from that hue, 14 bits (to allow for things greater than it)
-  word hueVariance = analogRead(POT_HUEVAR) << 4;
+  int hueVariance = analogRead(POT_HUEVAR) << 4;
   // What distance it takes to cycle back to the base hue
   word hueWidth = sqrt(analogRead(POT_HUEWID)) * hueVariance / 255;
-  Serial.print(">>> basehue ");
-  Serial.print(baseHue);
-  Serial.print(" huevar ");
-  Serial.print(hueVariance);
-  Serial.print(" huewid ");
-  Serial.print(hueWidth);
+  if (doprints) {
+    Serial.print(">>> basehue ");
+    Serial.print(baseHue);
+    Serial.print(" huewid ");
+    Serial.print(hueWidth);
+    Serial.print(" huevar ");
+    Serial.print(hueVariance);
+  }
 
   byte saturation = analogRead(POT_SAT) >> 2;
   byte hue;
   // START HERE: this is blinky and stuff when moved; start it with zero every time and it's fine
-  word curVariance = variance % (hueVariance<<1);
+  //word curVariance = variance % (hueVariance<<1);
+  while (variance < 0) variance += hueVariance*2;
+  while (hueVariance > 0 && variance > (hueVariance*2)) variance -= hueVariance*2;
+  int curVariance = variance;
   for (int i = 0; i < NUM_LEDS; i++) {
     hue = (baseHue + ((curVariance < hueVariance) ? (curVariance) : ((hueVariance << 1) - curVariance)) - 1) >> 6;
+    //hue = (baseHue + ((curVariance < hueVariance) ? (curVariance) : ((hueVariance << 1) - curVariance)) - 1) >> 6;
     //hue = ((variance < hueVariance) ? (variance) : ((hueVariance << 1) - variance)); // 5 shifts from analog
     //hue = (baseHue + (variance < hueVariance) ? (variance) : ((hueVariance << 1) - variance)) >> 7; // 5 shifts from analog
     //hue = (baseHue + (((variance < hueVariance) ? (variance) : ((hueVariance << 1) - variance)) << 2)) >> 9;
-    if (i == 0) {
+    if (i == 0 && doprints) {
       Serial.print(" curvar ");
       Serial.print(curVariance);
+      Serial.print(" thing ");
+      Serial.print(((curVariance < hueVariance) ? (curVariance) : ((hueVariance << 1) - curVariance)));
       Serial.print(" hue ");
       Serial.println(hue);
     }
@@ -148,13 +157,14 @@ void loop() {
       leds[i] = CHSV(0, 0, hue);
     }
     //Serial.println(curVariance);
-    curVariance = (curVariance + hueWidth) % (hueVariance << 1);
+    curVariance += hueWidth;
+    while (curVariance > hueVariance*2) curVariance -= hueVariance*2;
   }
-  word speed = analogRead(POT_SPEED);
-  if (speed < 500 || speed > 524) {
-    int thing = (analogRead(POT_SPEED) - 512) * 100 / FPS;
-    Serial.println(thing);
+  word spd = analogRead(POT_SPEED);
+  if (spd < 500 || spd > 524) {
+    int thing = (analogRead(POT_SPEED) - 512) * 200 / FPS;
     variance += thing;
+    if (doprints) Serial.println(thing);
   }
   //Serial.println("\n");
   FastLED.setBrightness(analogRead(POT_BRIGHT) >> 2);
